@@ -3,158 +3,21 @@ using SQLitePCL;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using static SqliteVirtualTables.Constants;
 
 namespace SqliteVirtualTables;
 
 unsafe class SeriesModule : IDisposable
 {
-    /*
-    ** CAPI3REF: Result Codes
-    ** KEYWORDS: {result code definitions}
-    **
-    ** Many SQLite functions return an integer result code from the set shown
-    ** here in order to indicate success or failure.
-    **
-    ** New error codes may be added in future versions of SQLite.
-    **
-    ** See also: [extended result code definitions]
-    */
-    const int SQLITE_OK = 0;   /* Successful result */
-    /* beginning-of-error-codes */
-    const int SQLITE_ERROR = 1;   /* Generic error */
-    const int SQLITE_INTERNAL = 2;   /* Internal logic error in SQLite */
-    const int SQLITE_PERM = 3;   /* Access permission denied */
-    const int SQLITE_ABORT = 4;   /* Callback routine requested an abort */
-    const int SQLITE_BUSY = 5;   /* The database file is locked */
-    const int SQLITE_LOCKED = 6;   /* A table in the database is locked */
-    const int SQLITE_NOMEM = 7;   /* A malloc() failed */
-    const int SQLITE_READONLY = 8;   /* Attempt to write a readonly database */
-    const int SQLITE_INTERRUPT = 9;   /* Operation terminated by sqlite3_interrupt()*/
-    const int SQLITE_IOERR = 10;   /* Some kind of disk I/O error occurred */
-    const int SQLITE_CORRUPT = 11;   /* The database disk image is malformed */
-    const int SQLITE_NOTFOUND = 12;   /* Unknown opcode in sqlite3_file_control() */
-    const int SQLITE_FULL = 13;   /* Insertion failed because database is full */
-    const int SQLITE_CANTOPEN = 14;   /* Unable to open the database file */
-    const int SQLITE_PROTOCOL = 15;   /* Database lock protocol error */
-    const int SQLITE_EMPTY = 16;   /* Internal use only */
-    const int SQLITE_SCHEMA = 17;   /* The database schema changed */
-    const int SQLITE_TOOBIG = 18;   /* String or BLOB exceeds size limit */
-    const int SQLITE_CONSTRAINT = 19;   /* Abort due to constraint violation */
-    const int SQLITE_MISMATCH = 20;   /* Data type mismatch */
-    const int SQLITE_MISUSE = 21;   /* Library used incorrectly */
-    const int SQLITE_NOLFS = 22;   /* Uses OS features not supported on host */
-    const int SQLITE_AUTH = 23;   /* Authorization denied */
-    const int SQLITE_FORMAT = 24;   /* Not used */
-    const int SQLITE_RANGE = 25;   /* 2nd parameter to sqlite3_bind out of range */
-    const int SQLITE_NOTADB = 26;   /* File opened that is not a database file */
-    const int SQLITE_NOTICE = 27;   /* Notifications from sqlite3_log() */
-    const int SQLITE_WARNING = 28;   /* Warnings from sqlite3_log() */
-    const int SQLITE_ROW = 100;  /* sqlite3_step() has another row ready */
-    const int SQLITE_DONE = 101;  /* sqlite3_step() has finished executing */
-    /* end-of-error-codes */
-
-
-    const int SQLITE_VTAB_CONSTRAINT_SUPPORT = 1;
-    const int SQLITE_VTAB_INNOCUOUS = 2;
-    const int SQLITE_VTAB_DIRECTONLY = 3;
-    const int SQLITE_VTAB_USES_ALL_SCHEMAS = 4;
-
-    /* Column numbers */
-    const int SERIES_COLUMN_VALUE = 0;
-    const int SERIES_COLUMN_START = 1;
-    const int SERIES_COLUMN_STOP = 2;
-    const int SERIES_COLUMN_STEP = 3;
-    /*
-    ** CAPI3REF: Fundamental Datatypes
-    ** KEYWORDS: SQLITE_TEXT
-    **
-    ** ^(Every value in SQLite has one of five fundamental datatypes:
-    **
-    ** <ul>
-    ** <li> 64-bit signed integer
-    ** <li> 64-bit IEEE floating point number
-    ** <li> string
-    ** <li> BLOB
-    ** <li> NULL
-    ** </ul>)^
-    **
-    ** These constants are codes for each of those types.
-    **
-    ** Note that the SQLITE_TEXT constant was also used in SQLite version 2
-    ** for a completely different meaning.  Software that links against both
-    ** SQLite version 2 and SQLite version 3 should use SQLITE3_TEXT, not
-    ** SQLITE_TEXT.
-    */
-    const int SQLITE_INTEGER = 1;
-    const int SQLITE_FLOAT = 2;
-    const int SQLITE_BLOB = 4;
-    const int SQLITE_NULL = 5;
-    const int SQLITE_TEXT = 3;
-
-    /*
-    ** CAPI3REF: Virtual Table Constraint Operator Codes
-    **
-    ** These macros define the allowed values for the
-    ** [sqlite3_index_info].aConstraint[].op field.  Each value represents
-    ** an operator that is part of a constraint term in the WHERE clause of
-    ** a query that uses a [virtual table].
-    **
-    ** ^The left-hand operand of the operator is given by the corresponding
-    ** aConstraint[].iColumn field.  ^An iColumn of -1 indicates the left-hand
-    ** operand is the rowid.
-    ** The SQLITE_INDEX_CONSTRAINT_LIMIT and SQLITE_INDEX_CONSTRAINT_OFFSET
-    ** operators have no left-hand operand, and so for those operators the
-    ** corresponding aConstraint[].iColumn is meaningless and should not be
-    ** used.
-    **
-    ** All operator values from SQLITE_INDEX_CONSTRAINT_FUNCTION through
-    ** value 255 are reserved to represent functions that are overloaded
-    ** by the [xFindFunction|xFindFunction method] of the virtual table
-    ** implementation.
-    **
-    ** The right-hand operands for each constraint might be accessible using
-    ** the [sqlite3_vtab_rhs_value()] interface.  Usually the right-hand
-    ** operand is only available if it appears as a single constant literal
-    ** in the input SQL.  If the right-hand operand is another column or an
-    ** expression (even a constant expression) or a parameter, then the
-    ** sqlite3_vtab_rhs_value() probably will not be able to extract it.
-    ** ^The SQLITE_INDEX_CONSTRAINT_ISNULL and
-    ** SQLITE_INDEX_CONSTRAINT_ISNOTNULL operators have no right-hand operand
-    ** and hence calls to sqlite3_vtab_rhs_value() for those operators will
-    ** always return SQLITE_NOTFOUND.
-    **
-    ** The collating sequence to be used for comparison can be found using
-    ** the [sqlite3_vtab_collation()] interface.  For most real-world virtual
-    ** tables, the collating sequence of constraints does not matter (for example
-    ** because the constraints are numeric) and so the sqlite3_vtab_collation()
-    ** interface is not commonly needed.
-    */
-    const int SQLITE_INDEX_CONSTRAINT_EQ        =   2;
-    const int SQLITE_INDEX_CONSTRAINT_GT        =   4;
-    const int SQLITE_INDEX_CONSTRAINT_LE        =   8;
-    const int SQLITE_INDEX_CONSTRAINT_LT        =  16;
-    const int SQLITE_INDEX_CONSTRAINT_GE        =  32;
-    const int SQLITE_INDEX_CONSTRAINT_MATCH     =  64;
-    const int SQLITE_INDEX_CONSTRAINT_LIKE      =  65;
-    const int SQLITE_INDEX_CONSTRAINT_GLOB      =  66;
-    const int SQLITE_INDEX_CONSTRAINT_REGEXP    =  67;
-    const int SQLITE_INDEX_CONSTRAINT_NE        =  68;
-    const int SQLITE_INDEX_CONSTRAINT_ISNOT     =  69;
-    const int SQLITE_INDEX_CONSTRAINT_ISNOTNULL =  70;
-    const int SQLITE_INDEX_CONSTRAINT_ISNULL    =  71;
-    const int SQLITE_INDEX_CONSTRAINT_IS        =  72;
-    const int SQLITE_INDEX_CONSTRAINT_LIMIT     =  73;
-    const int SQLITE_INDEX_CONSTRAINT_OFFSET    =  74;
-    const int SQLITE_INDEX_CONSTRAINT_FUNCTION  = 150;
     private readonly SqliteConnection connection;
     static sqlite3_module seriesModule = new sqlite3_module()
     {
         iVersion = 0,
-        xCreate = 0,
+        xCreate = null,
         xConnect = &seriesConnect,
         xBestIndex = &seriesBestIndex,
         xDisconnect = &seriesDisconnect,
-        xDestroy = 0,
+        xDestroy = null,
         xOpen = &seriesOpen,
         xClose = &seriesClose,
         xFilter = &seriesFilter,
@@ -162,7 +25,7 @@ unsafe class SeriesModule : IDisposable
         xEof = &seriesEof,
         xColumn = &seriesColumn,
         xRowid = &seriesRowid,
-        xUpdate = 0,
+        xUpdate = null,
         xBegin = 0,
         xSync = 0,
         xCommit = 0,
@@ -343,9 +206,9 @@ unsafe class SeriesModule : IDisposable
     static int seriesConnect(
         nint db,
         IntPtr pUnused,
-        int argcUnused, IntPtr argvUnused,
+        int argcUnused, byte** argvUnused,
         sqlite3_vtab** ppVtab,
-        IntPtr pzErrUnused
+        byte** pzErrUnused
     )
     {
         sqlite3_vtab* pNew;
@@ -485,7 +348,7 @@ unsafe class SeriesModule : IDisposable
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     static int seriesFilter(
       sqlite3_vtab_cursor* pVtabCursor,
-      int idxNum, IntPtr idxStrUnused,
+      int idxNum, byte* idxStrUnused,
       int argc, nint* argv
     )
     {
